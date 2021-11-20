@@ -278,6 +278,7 @@ class AudioManager(BaseDriver):
 
         self._pat.set_bpm(bpm)
         self.init_params()
+        self.print_info("bpm")
 
     #-------------------------------------------
 
@@ -301,6 +302,7 @@ class AudioManager(BaseDriver):
         self.init_pos()
         self._audioDriver.start()
         self._playing = True
+        self.print_info("Play Start")
         
     #-------------------------------------------
 
@@ -309,10 +311,12 @@ class AudioManager(BaseDriver):
             self._audioDriver.stop()
             self._playing = False
             self._pausing = True
+            self.print_info("Pause")
         elif not self._playing or self._pausing:
             self._audioDriver.start()
             self._playing = True
             self._pausing = False
+            self.print_info("Play")
 
     #-------------------------------------------
     
@@ -322,14 +326,17 @@ class AudioManager(BaseDriver):
             self.init_pos()
             self._playing = False
             self._pausing = False
+            self.print_info("Stop")
         
     #-------------------------------------------
  
     def print_info(self, info):
-        if not self._pat: return
+        assert self._pat
         if info == "bpm":
             val = self._pat.get_bpm()
             print(f"Bpm:  {val}")
+        else:
+            print(info)
 
     #-------------------------------------------
 
@@ -341,11 +348,22 @@ def main():
     audi_man = AudioManager()
     audi_man.init_audioDriver()
     audi_man.init_pattern()
-    sav_key = ''
+    valStr = ""
+    savStr = ""
     while 1:
-        key = input("-> ")
-        if key == '': key = sav_key
-        else: sav_key = key
+        key = ""
+        param = ""
+        valStr = input("-> ")
+        if valStr == '': valStr = savStr
+        else: savStr = valStr
+        if valStr == " ":
+            key = valStr
+        else:
+            lst = valStr.split()
+            lenLst = len(lst)
+            if lenLst >0: key = lst[0]
+            if lenLst >1: param = lst[1]
+
         if key == 'q':
             print("Bye Bye!!!")
             audi_man.stop()
@@ -360,14 +378,21 @@ def main():
             audi_man.play_pause()
         elif key == 'f':
             audi_man.change_bpm(10, inc=1)
-            audi_man.print_info("bpm")
         elif key == 'F':
             audi_man.change_bpm(-10, inc=1)
-            audi_man.print_info("bpm")
+        elif key == 'ff':
+            audi_man.change_bpm(120, inc=0) # not incremental
+        elif key == 'bpm':
+            if param:
+                audi_man.change_bpm(int(param), inc=0) # not incremental
+            else:
+                audi_man.change_bpm(120, 0)
+
+
+#-------------------------------------------
         elif key == 'ff':
             audi_man.change_bpm(120, inc=0) # not incremental
             audi_man.print_info("bpm")
-#-------------------------------------------
 
 if __name__ == "__main__":
     main()
