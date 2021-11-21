@@ -362,20 +362,22 @@ class AudioManager(BaseDriver):
 
     #-------------------------------------------
 
-    def change_freq(self, index, freq, inc=0):
+    def change_freq(self, index, freq, inc=0, msg=None):
         assert self._pat
         if inc == 1: # is incremental
             freq = self._pat.get_freq(index) + freq
             pass
 
         samp_len =2 # in sec
-        samp_obj = SampleObj(freq, samp_len)
+        samp_obj = self._pat.get_sample(index) # SampleObj(freq, samp_len)
+        assert samp_obj
+        samp_obj.freq = freq
         samp_obj.raw_data = self._waveGen.gen_samples(freq, samp_len)
-        self._pat.set_sample(index, samp_obj)
         self._pat.gen_audio()
         self.init_params()
         freq = self._pat.get_freq(index)
-        msg = f"Freq: {freq}"
+        if msg is None:
+            msg = f"Freq: {freq}"
         self.print_info(msg)
 
     #-------------------------------------------
@@ -387,9 +389,9 @@ class AudioManager(BaseDriver):
 
         self._pat.set_note(index, note)
         freq = self._midTools.mid2freq(note)
-        self.change_freq(index, freq, inc)
         msg = f"Note: {note}"
-        self.print_info(msg)
+        self.change_freq(index, freq, inc=0, msg=msg)
+        # self.print_info(msg)
 
     #-------------------------------------------
 
@@ -483,13 +485,10 @@ def main():
             audi_man.stop()
         elif key == ' ':
             audi_man.play_pause()
-        elif key == 'f':
+        elif key == 'sb':
             audi_man.change_bpm(10, inc=1)
-        elif key == 'F':
+        elif key == 'sB':
             audi_man.change_bpm(-10, inc=1)
-        elif key == 'ff':
-            audi_man.change_bpm(120, inc=0) # not incremental
-
         elif key == 'bpm':
             if param1:
                 audi_man.change_bpm(float(param1), inc=0) # not incremental
@@ -499,11 +498,25 @@ def main():
             if not param1: param1 =0
             if not param2: param2 =440
             audi_man.change_freq(int(param1), float(param2), inc=0) # not incremental
+        elif key == 'sf':
+            if not param1: param1 =0
+            audi_man.change_freq(int(param1), 10, inc=1)
+        elif key == 'sF':
+            if not param1: param1 =0
+            audi_man.change_freq(int(param1), -10, inc=1)
+
 
         elif key == "note":
             if not param1: param1 =0
             if not param2: param2 =69 # A4
             audi_man.change_note(int(param1), int(param2), inc=0) # not incremental
+        elif key == "sn":
+            if not param1: param1 =0
+            audi_man.change_note(int(param1), 1, inc=1)
+        elif key == "sN":
+            if not param1: param1 =0
+            audi_man.change_note(int(param1), -1, inc=1)
+
 
 #-------------------------------------------
 
