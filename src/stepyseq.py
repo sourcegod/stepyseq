@@ -285,6 +285,22 @@ class AudioManager(BaseDriver):
 
     #-------------------------------------------
 
+    def poll_audio(self):
+        assert self._audioData
+        step = self._index + self._frameBytes # frame_count * 4 # 4 for float size
+        try:
+            if step >= self._dataLen:
+                self._index =0
+            data = self._audioData[self._index:step]
+            self._index += self._frameBytes
+            return data
+
+        except IndexError:
+            pass
+
+
+    #-------------------------------------------
+
     def _func_callback(self, in_data, frame_count, time_info, status):
         # print("frame_count: ", frame_count)
         data = None
@@ -292,17 +308,9 @@ class AudioManager(BaseDriver):
             print("Initialize Data")
             # self._audioData = self.get_data()
             return (data, None)
+        
         # print("len data: ", len(self._audioData))
-        step = self._index + self._frameBytes # frame_count * 4 # 4 for float size
-        try:
-            if step >= self._dataLen:
-                self._index =0
-            data = self._audioData[self._index:step]
-            self._index += self._frameBytes
-
-        except IndexError:
-            pass
-
+        data = self.poll_audio()
         return (data, pyaudio.paContinue)
 
     #-------------------------------------------
@@ -384,8 +392,10 @@ class AudioManager(BaseDriver):
 
     def change_note(self, index, note, inc=0):
         assert self._pat
+        print("before note: ", note)
         if inc == 1: # is incremental
             note = self._pat.get_note(index) + note
+            print("val note: ", note)
 
         self._pat.set_note(index, note)
         freq = self._midTools.mid2freq(note)
@@ -485,26 +495,31 @@ def main():
             audi_man.stop()
         elif key == ' ':
             audi_man.play_pause()
-        elif key == 'sb':
-            audi_man.change_bpm(10, inc=1)
-        elif key == 'sB':
-            audi_man.change_bpm(-10, inc=1)
+
         elif key == 'bpm':
             if param1:
                 audi_man.change_bpm(float(param1), inc=0) # not incremental
             else:
                 audi_man.change_bpm(120, 0)
+        elif key == 'sb':
+            if not param1: param1 =10
+            audi_man.change_bpm(float(param1), inc=1)
+        elif key == 'sB':
+            if not param1: param1 =-10
+            audi_man.change_bpm(float(param1), inc=1)
+
         elif key == "freq":
             if not param1: param1 =0
             if not param2: param2 =440
             audi_man.change_freq(int(param1), float(param2), inc=0) # not incremental
         elif key == 'sf':
             if not param1: param1 =0
-            audi_man.change_freq(int(param1), 10, inc=1)
+            if not param2: param2 = 10
+            audi_man.change_freq(int(param1), float(param2), inc=1)
         elif key == 'sF':
             if not param1: param1 =0
-            audi_man.change_freq(int(param1), -10, inc=1)
-
+            if not param2: param2 = -10
+            audi_man.change_freq(int(param1), float(param2), inc=1)
 
         elif key == "note":
             if not param1: param1 =0
@@ -512,11 +527,12 @@ def main():
             audi_man.change_note(int(param1), int(param2), inc=0) # not incremental
         elif key == "sn":
             if not param1: param1 =0
-            audi_man.change_note(int(param1), 1, inc=1)
+            if not param2: param2 =1
+            audi_man.change_note(int(param1), int(param2), inc=1)
         elif key == "sN":
             if not param1: param1 =0
-            audi_man.change_note(int(param1), -1, inc=1)
-
+            if not param2: param2 =-1
+            audi_man.change_note(int(param1), int(param2), inc=1)
 
 #-------------------------------------------
 
