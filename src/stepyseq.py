@@ -313,7 +313,7 @@ class AudioManager(BaseDriver):
     #-------------------------------------------
 
     def render_audio0(self):
-        """ First implementation """
+        """ First implementation deque object"""
         nb_data =4
         if len(self._deqData) > nb_data/2: return
         samp_lst = self._pat.get_sampleList()
@@ -339,36 +339,54 @@ class AudioManager(BaseDriver):
     #-------------------------------------------
 
     def render_audio(self):
-        """ second implementation """
-        nb_data =4
-        if self._sampChanged or self._sampIndex == 0:
-            self._deqData.clear()
-        elif not self._sampChanged and len(self._deqData) > nb_data/2: 
-            return
+        """ 3nd implementation with deque object"""
+        nb_data =2
+        if len(self._deqData) > nb_data/2: return
 
         samp_lst = self._pat.get_sampleList()
-        if self._sampIndex >= len(samp_lst):
-            self._sampIndex =0
-        # print(f"sampIndex: {self._sampIndex}, len deq: {len(self._deqData)}")
+        if self._sampIndex >= len(samp_lst): self._sampIndex =0
         samp = samp_lst[self._sampIndex]
-        nb_samples = self._pat._nbSamples
         # reshape accept only a multiple of frame_count
+        nb_samples = self._pat._nbSamples
         (quo, rest) = divmod(nb_samples, self._frameCount)
         if rest: nb_samples -= rest
         # no copy, just numpy view slicing
         raw_data = samp.raw_data[0:nb_samples].reshape(-1, self._frameCount)
-        
-        # print("Len deq before loop: ", len(self._deqData))
-        
-        # """
-        for audio_data in raw_data:
-            self._deqData.append(
-                    np.float32(audio_data).tobytes()
-                    )
-        # """
-        # print("Len deq after loop: ", len(self._deqData))
-        self._sampIndex +=1
-        self._sampChanged =0
+
+        while 1:
+        # if 1:
+            if len(self._deqData) >= nb_data: break
+            if self._sampIndex >= len(samp_lst):
+                self._sampIndex =0
+                self._sampChanged =1
+            
+            if self._sampChanged:
+                # print(f"sampIndex: {self._sampIndex}, len deq: {len(self._deqData)}")
+                samp = samp_lst[self._sampIndex]
+                # reshape accept only a multiple of frame_count
+                (quo, rest) = divmod(nb_samples, self._frameCount)
+                if rest: nb_samples -= rest
+                # no copy, just numpy view slicing
+                raw_data = samp.raw_data[0:nb_samples].reshape(-1, self._frameCount)
+                self._sampChanged =0
+
+            if self._index >= len(raw_data):
+                self._index =0
+                self._sampIndex +=1
+                self._sampChanged =1
+            
+            try:
+                audio_data = raw_data[self._index]
+                # print("Len deq before loop: ", len(self._deqData))
+
+                audio_data = np.float32(audio_data).tobytes()
+                self._deqData.append(audio_data)
+                # print("Len deq after loop: ", len(self._deqData))
+                self._index +=1
+                self._sampChanged =0
+                # self._sampChanged =0
+            except IndexError:
+                pass
 
     #-------------------------------------------
 
@@ -385,9 +403,12 @@ class AudioManager(BaseDriver):
         
         # data = self.poll_audio()
         # print("len deque: ", len(self._deqData))
+        # """
+        # self.render_audio0()
         self.render_audio()
         data = self.get_bufData() 
-        
+        # """
+
         return (data, pyaudio.paContinue)
 
     #-------------------------------------------
@@ -538,18 +559,27 @@ class AudioManager(BaseDriver):
 
     #-------------------------------------------
     
-    def perf(self, nb_times, nb_repeats=3):
+    def perf(self, nb_times=10, nb_repeats=3):
         """
         using the timeit module for short function
+        Note: when passing nb_times and nb_repeats arguments:
+        poll_audio function is faster around 100 Microsec than render_audio which using deque object, 
+        even with 2 or 4 pre-loaded data.
+        but with no arguments passing:
+        render_audio is faster around 100 microsec.
+        ???
         """
 
+        nb_times = 1_000_000
+        nb_repeats =7
+
         func1 = """ 
-def f():
+def fun():
     return self.poll_audio()
 """
 
         func2 = """ 
-def f():
+def fun():
     self.render_audio()
     data = self.get_bufData()
 """
@@ -618,6 +648,8 @@ def main():
         elif key == ' ':
             audi_man.play_pause()
 
+        elif key == "tt":
+            audi_man.perf()
         elif key == "bpm":
             if not param1: param1 = 120
             audi_man.change_bpm(float(param1), inc=0) # not incremental
