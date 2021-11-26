@@ -129,6 +129,7 @@ class Pattern(object):
         self._nbClockMsec = 60000 # in millisec
         self._minBpm = 30
         self._maxBpm = 600
+        self._frameCount = 960
         self._rate = rate # in samples
         self._nbNotes = nbNotes
         if bpm >= self._minBpm and bpm <= self._maxBpm:
@@ -139,6 +140,7 @@ class Pattern(object):
         self._nbSamples = int( (self._tempo * self._rate / 1000) * (4 / self._nbNotes) ) # in samples
         self._sampLst = [] # [0] * self._nbNotes
         self._paramLst = []
+        self._frameLst = []
         self._audioData = None
     
     #-------------------------------------------
@@ -220,8 +222,29 @@ class Pattern(object):
 
     #-------------------------------------------
 
+    def set_frameList(self):
+        self._frameLst = []
+        samp_lst = self._sampLst
+        nb_samples = self._nbSamples
+        # reshape accept only a multiple of frame_count
+        (quo, rest) = divmod(nb_samples, self._frameCount)
+        if rest: nb_samples -= rest
+        for samp in samp_lst:
+            # no copy, just numpy view slicing
+            frame_arr = samp.raw_data[0:nb_samples].reshape(-1, self._frameCount)
+            self._frameLst.append(frame_arr)
+
+    #-------------------------------------------
+
+    def get_frameList(self):
+        return self._frameLst
+
+    #-------------------------------------------
+
+
     def gen_audio(self):
         audioData = []
+        self.set_frameList()
         samp_lst = self.get_sampleList()
         for samp in samp_lst:
             audioData.extend(samp.raw_data[0:self._nbSamples])
@@ -313,7 +336,7 @@ class AudioManager(BaseDriver):
     #-------------------------------------------
 
     def render_audio0(self):
-        """ First implementation deque object"""
+        """ First implementation """
         nb_data =4
         if len(self._deqData) > nb_data/2: return
         samp_lst = self._pat.get_sampleList()
@@ -338,53 +361,85 @@ class AudioManager(BaseDriver):
         
     #-------------------------------------------
 
-    def render_audio(self):
-        """ 3nd implementation with deque object"""
-        nb_data =2
-        if len(self._deqData) > nb_data/2: return
+    def render_audio2(self):
+        """ 2nd implementation """
+        nb_data =4
+        if self._sampChanged or self._sampIndex == 0:
+            self._deqData.clear()
+        elif not self._sampChanged and len(self._deqData) > nb_data/2: 
+            return
 
         samp_lst = self._pat.get_sampleList()
-        if self._sampIndex >= len(samp_lst): self._sampIndex =0
+        if self._sampIndex >= len(samp_lst):
+            self._sampIndex =0
+        # print(f"sampIndex: {self._sampIndex}, len deq: {len(self._deqData)}")
         samp = samp_lst[self._sampIndex]
-        # reshape accept only a multiple of frame_count
         nb_samples = self._pat._nbSamples
+        # reshape accept only a multiple of frame_count
         (quo, rest) = divmod(nb_samples, self._frameCount)
         if rest: nb_samples -= rest
         # no copy, just numpy view slicing
         raw_data = samp.raw_data[0:nb_samples].reshape(-1, self._frameCount)
+        
+        # print("Len deq before loop: ", len(self._deqData))
+        
+        # """
+        for audio_data in raw_data:
+            self._deqData.append(
+                    np.float32(audio_data).tobytes()
+                    )
+        # """
+        # print("Len deq after loop: ", len(self._deqData))
+        self._sampIndex +=1
+        self._sampChanged =0
+
+    #-------------------------------------------
+
+    def render_audio(self):
+        """ 3nd implementation with deque object """
+        nb_data =2
+        if len(self._deqData) > nb_data/2: return
+
+        frame_lst = self._pat.get_frameList()
+        # print(f"First sampIndex: {self._sampIndex}, Len frame_lst: {len(frame_lst)}")
+        
+        if self._sampIndex >= len(frame_lst): 
+            frame_arr = frame_lst[0]
+            self._sampChanged =1
+        else:
+            frame_arr = frame_lst[self._sampIndex]
+        
+        if self._index >= len(frame_arr): 
+            audio_data = frame_arr[0]
+            self._sampChanged =1
+        else:
+            audio_data = frame_arr[self._index]
 
         while 1:
-        # if 1:
             if len(self._deqData) >= nb_data: break
-            if self._sampIndex >= len(samp_lst):
+            if self._sampIndex >= len(frame_lst):
                 self._sampIndex =0
+                frame_arr = frame_lst[self._sampIndex]
                 self._sampChanged =1
             
-            if self._sampChanged:
-                # print(f"sampIndex: {self._sampIndex}, len deq: {len(self._deqData)}")
-                samp = samp_lst[self._sampIndex]
-                # reshape accept only a multiple of frame_count
-                (quo, rest) = divmod(nb_samples, self._frameCount)
-                if rest: nb_samples -= rest
-                # no copy, just numpy view slicing
-                raw_data = samp.raw_data[0:nb_samples].reshape(-1, self._frameCount)
-                self._sampChanged =0
-
-            if self._index >= len(raw_data):
+            if self._index >= len(frame_arr):
                 self._index =0
-                self._sampIndex +=1
+                if self._sampIndex >= len(frame_lst) -1:
+                    self._sampIndex =0
+                else:
+                    self._sampIndex +=1
+                frame_arr = frame_lst[self._sampIndex]
+                audio_data = frame_arr[self._index]
                 self._sampChanged =1
             
             try:
-                audio_data = raw_data[self._index]
-                # print("Len deq before loop: ", len(self._deqData))
-
+                audio_data = frame_arr[self._index]
                 audio_data = np.float32(audio_data).tobytes()
                 self._deqData.append(audio_data)
                 # print("Len deq after loop: ", len(self._deqData))
                 self._index +=1
                 self._sampChanged =0
-                # self._sampChanged =0
+
             except IndexError:
                 pass
 
@@ -403,12 +458,9 @@ class AudioManager(BaseDriver):
         
         # data = self.poll_audio()
         # print("len deque: ", len(self._deqData))
-        # """
-        # self.render_audio0()
         self.render_audio()
         data = self.get_bufData() 
-        # """
-
+        
         return (data, pyaudio.paContinue)
 
     #-------------------------------------------
@@ -559,27 +611,24 @@ class AudioManager(BaseDriver):
 
     #-------------------------------------------
     
-    def perf(self, nb_times=10, nb_repeats=3):
+    def perf(self, nb_times=1_000_000, nb_repeats=7):
         """
         using the timeit module for short function
-        Note: when passing nb_times and nb_repeats arguments:
-        poll_audio function is faster around 100 Microsec than render_audio which using deque object, 
-        even with 2 or 4 pre-loaded data.
-        but with no arguments passing:
-        render_audio is faster around 100 microsec.
-        ???
+        Note: poll_audio is faster than render_audio, when calling with arguments.
+        But, it is the inverse result when calling with no arguments
+        WHY???
         """
 
-        nb_times = 1_000_000
-        nb_repeats =7
 
+        # nb_times = 1_000_000
+        # nb_repeats =7
         func1 = """ 
-def fun():
+def f():
     return self.poll_audio()
 """
 
         func2 = """ 
-def fun():
+def f():
     self.render_audio()
     data = self.get_bufData()
 """
@@ -593,9 +642,9 @@ def fun():
         """
 
         time_lst = timeit.repeat(stmt=func1, number=nb_times, repeat=nb_repeats)
-        print("min time for poll_audio: ", min(time_lst))
+        print("min time for poll_audio: {:0.6f}".format(min(time_lst)))
         time_lst = timeit.repeat(stmt=func2, number=nb_times, repeat=nb_repeats)
-        print("min time for render_audio: ", min(time_lst))
+        print("min time for render_audio:  {:0.6f}".format(min(time_lst)))
          # """
 
 
@@ -648,8 +697,6 @@ def main():
         elif key == ' ':
             audi_man.play_pause()
 
-        elif key == "tt":
-            audi_man.perf()
         elif key == "bpm":
             if not param1: param1 = 120
             audi_man.change_bpm(float(param1), inc=0) # not incremental
@@ -686,6 +733,8 @@ def main():
             if not param2: param2 =-1
             audi_man.change_note(int(param1), int(param2), inc=1)
         
+        elif key == "tt":
+            audi_man.perf()
         elif key == "test":
             audi_man.test()
 #-------------------------------------------
