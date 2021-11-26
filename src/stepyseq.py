@@ -268,8 +268,8 @@ class Pattern(object):
     def gen_audio(self):
         data_lst = []
         nb_samples = self._nbSamples
-        # self.set_frameList()
-        self.gen_byteList()
+        self.set_frameList()
+        # self.gen_byteList()
         samp_lst = self.get_sampleList()
         for samp in samp_lst:
             data_lst.append(samp.raw_data[0:nb_samples])
@@ -420,43 +420,41 @@ class AudioManager(BaseDriver):
 
     #-------------------------------------------
 
-    def render_audio3(self):
-        """ 3nd implementation with deque object """
+    def render_audio(self):
+        """
+        render_audio3
+        3nd implementation with deque object 
+        """
+        frame_lst = self._pat.get_frameList()
+        if not frame_lst: return
         nb_data =2
         if len(self._deqData) > nb_data/2: return
 
-        frame_lst = self._pat.get_frameList()
-        if not frame_lst: return
         # print(f"First sampIndex: {self._sampIndex}, Len frame_lst: {len(frame_lst)}")
         
+        index_changed = samp_changed =0
         if self._sampIndex >= len(frame_lst): 
             frame_arr = frame_lst[0]
-            self._sampChanged =1
+            samp_changed =1
         else:
             frame_arr = frame_lst[self._sampIndex]
         
         if self._index >= len(frame_arr): 
             audio_data = frame_arr[0]
-            self._sampChanged =1
+            index_changed =1
         else:
             audio_data = frame_arr[self._index]
 
         while 1:
             if len(self._deqData) >= nb_data: break
-            if self._sampIndex >= len(frame_lst):
-                self._sampIndex =0
-                frame_arr = frame_lst[self._sampIndex]
-                self._sampChanged =1
-            
+           
             if self._index >= len(frame_arr):
                 self._index =0
                 if self._sampIndex >= len(frame_lst) -1:
                     self._sampIndex =0
                 else:
                     self._sampIndex +=1
-                frame_arr = frame_lst[self._sampIndex]
-                audio_data = frame_arr[self._index]
-                self._sampChanged =1
+                samp_changed =1
             
             try:
                 audio_data = frame_arr[self._index]
@@ -464,14 +462,14 @@ class AudioManager(BaseDriver):
                 self._deqData.append(audio_data)
                 # print("Len deq after loop: ", len(self._deqData))
                 self._index +=1
-                self._sampChanged =0
+                samp_changed =0
 
             except IndexError:
                 pass
 
     #-------------------------------------------
 
-    def render_audio(self):
+    def render_audio4(self):
         """ 4nd implementation with deque object and bytes string list """
         byte_lst = self._pat.get_byteList()
         if not byte_lst: return
