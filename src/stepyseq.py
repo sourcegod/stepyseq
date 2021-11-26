@@ -141,6 +141,7 @@ class Pattern(object):
         self._sampLst = [] # [0] * self._nbNotes
         self._paramLst = []
         self._frameLst = []
+        self._byteLst = []
         self._audioData = None
     
     #-------------------------------------------
@@ -241,18 +242,42 @@ class Pattern(object):
 
     #-------------------------------------------
 
+    def gen_byteList(self):
+        self._byteLst = []
+        samp_lst = self.get_sampleList()
+        nb_samples = self._nbSamples
+        # reshape accept only a multiple of frame_count
+        (quo, rest) = divmod(nb_samples, self._frameCount)
+        if rest: nb_samples -= rest
+        for samp in samp_lst:
+            # no copy, just numpy view slicing
+            row_lst = samp.raw_data[0:nb_samples].reshape(-1, self._frameCount)
+            byte_lst = [np.float32(arr).tobytes() for arr in row_lst]
+            self._byteLst.append(byte_lst)
+        
+        return self._byteLst
+
+    #-------------------------------------------
+
+    def get_byteList(self):
+        return self._byteLst
+
+    #-------------------------------------------
+
 
     def gen_audio(self):
-        audioData = []
-        self.set_frameList()
+        data_lst = []
+        nb_samples = self._nbSamples
+        # self.set_frameList()
+        self.gen_byteList()
         samp_lst = self.get_sampleList()
         for samp in samp_lst:
-            audioData.extend(samp.raw_data[0:self._nbSamples])
+            data_lst.append(samp.raw_data[0:nb_samples])
         
-        audioData = np.float32(audioData).tobytes()
-        self._audioData = audioData
+        audio_data = np.float32(data_lst).tobytes()
+        self._audioData = audio_data
         
-        return audioData
+        return audio_data
 
     #-------------------------------------------
 
@@ -335,7 +360,7 @@ class AudioManager(BaseDriver):
 
     #-------------------------------------------
 
-    def render_audio0(self):
+    def render_audio1(self):
         """ First implementation """
         nb_data =4
         if len(self._deqData) > nb_data/2: return
@@ -395,12 +420,13 @@ class AudioManager(BaseDriver):
 
     #-------------------------------------------
 
-    def render_audio(self):
+    def render_audio3(self):
         """ 3nd implementation with deque object """
         nb_data =2
         if len(self._deqData) > nb_data/2: return
 
         frame_lst = self._pat.get_frameList()
+        if not frame_lst: return
         # print(f"First sampIndex: {self._sampIndex}, Len frame_lst: {len(frame_lst)}")
         
         if self._sampIndex >= len(frame_lst): 
@@ -444,6 +470,53 @@ class AudioManager(BaseDriver):
                 pass
 
     #-------------------------------------------
+
+    def render_audio(self):
+        """ 4nd implementation with deque object and bytes string list """
+        byte_lst = self._pat.get_byteList()
+        if not byte_lst: return
+        nb_data =2
+        if len(self._deqData) > nb_data/2: return
+
+        # print(f"First sampIndex: {self._sampIndex}, Len byte_lst: {len(byte_lst)}")
+        
+        index_changed = samp_changed =0
+        if self._sampIndex >= len(byte_lst): 
+            row_lst = byte_lst[0]
+            samp_changed =1
+        else:
+            row_lst = byte_lst[self._sampIndex]
+        
+        if self._index >= len(row_lst): 
+            audio_data = row_lst[0]
+            index_changed =1
+        else:
+            audio_data = row_lst[self._index]
+
+        while 1:
+            if len(self._deqData) >= nb_data: break
+            
+            if self._index >= len(row_lst):
+                self._index =0
+                if self._sampIndex >= len(byte_lst) -1:
+                    self._sampIndex =0
+                else:
+                    self._sampIndex +=1
+                samp_changed =1
+            
+            try:
+                row_lst = byte_lst[self._sampIndex]
+                audio_data = row_lst[self._index]
+                self._deqData.append(audio_data)
+                # print("Len deq after loop: ", len(self._deqData))
+                self._index +=1
+                samp_changed =0
+
+            except IndexError:
+                pass
+
+    #-------------------------------------------
+
 
 
     def is_audioReady(self):
@@ -542,10 +615,9 @@ class AudioManager(BaseDriver):
 
     def change_note(self, index, note, inc=0):
         assert self._pat
-        print("before note: ", note)
         if inc == 1: # is incremental
             note = self._pat.get_note(index) + note
-            print("val note: ", note)
+            # print("val note: ", note)
 
         self._pat.set_note(index, note)
         freq = self._midTools.mid2freq(note)
