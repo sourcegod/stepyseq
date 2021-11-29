@@ -125,13 +125,14 @@ class WaveGenerator(object):
 #========================================
 
 class Pattern(object):
-    def __init__(self, bpm=120, rate=48000, nbNotes=4):
+    def __init__(self, bpm=120, rate=48000, nbNotes=4, sampLen=1):
         self._nbClockMsec = 60000 # in millisec
-        self._minBpm = 1
+        self._minBpm = 10
         self._maxBpm = 600
         self._frameCount = 960
         self._rate = rate # in samples
         self._nbNotes = nbNotes
+        self._sampLen = sampLen # in sec
         if bpm >= self._minBpm and bpm <= self._maxBpm:
             self._bpm = bpm
         else:
@@ -142,10 +143,17 @@ class Pattern(object):
         self._paramLst = []
         self._frameLst = []
         self._byteLst = []
+        self._sampIndex =0
+        self._frameIndex =0
+
+        
+        """
         self._nbTimes =0 # for repeating note
         self._restSamples =0
         self._nbCount =1
         self._restFrame = []
+        """
+
         self._audioData = None
     
     #-------------------------------------------
@@ -157,23 +165,20 @@ class Pattern(object):
     #-------------------------------------------
 
     def set_bpm(self, bpm):
-        if bpm >= self._minBpm and bpm <= self._maxBpm:
-            self._bpm = bpm
-            self._nbTimes =0
-            self._restSamples =0
-            self._nbCount =1
-            self._tempo = float(self._nbClockMsec / self._bpm) # in millisec
-            if self._tempo > 1000:
-                self._nbSamples = int( self._rate * (4 / self._nbNotes) )
-                # calculate how many times to be repeating
-                (nb_times, rest_samples) = divmod(self._tempo, 1000)
-                self._restSamples = int(rest_samples * self._rate / 1000 )
-                self._nbTimes = int(nb_times)
-                print(f"nbSamples: {self._nbSamples},\n tempo: {self._tempo}, nbTimes: {self._nbTimes}, resSamples: {self._restSamples}")
-            else:
-                self._nbSamples = int( (self._tempo * self._rate / 1000) * (4 / self._nbNotes) ) # in samples
-            # self.gen_audio()
-     
+        if bpm < self._minBpm: bpm = self._minBpm
+        elif bpm > self._maxBpm: bpm = self._maxBpm
+        # TODO: make nbTimes and nbCount to sets bpm until 1 bpm with small sample data
+        max_samples = int( self._sampLen * self._rate )
+        tempo = float(self._nbClockMsec / bpm) # in millisec
+        nb_samples = int( (tempo * self._rate / 1000) ) # in samples
+        if nb_samples > max_samples:
+            return
+        self._nbSamples = int( nb_samples * (4 / self._nbNotes) ) # in samples
+        self._tempo = tempo
+        self._bpm = bpm
+
+        # self.gen_audio()
+
     #-------------------------------------------
  
     def get_freq(self, index):
@@ -244,7 +249,6 @@ class Pattern(object):
         self._frameLst = []
         samp_lst = self._sampLst
         nb_samples = self._nbSamples
-        rest_samples = self._restSamples
         # reshape accept only a multiple of frame_count
         (quo, rest) = divmod(nb_samples, frame_count)
         if rest: nb_samples -= rest
@@ -252,11 +256,8 @@ class Pattern(object):
             # no copy, just numpy view slicing
             frame_arr = samp.raw_data[0:nb_samples].reshape(-1, frame_count)
             self._frameLst.append(frame_arr)
-        if rest_samples >0:
-            (quo, rest) = divmod(rest_samples, frame_count)
-            if rest: rest_samples -= rest
-            self._restFrame = samp.raw_data[0:rest_samples].reshape(-1, frame_count)
-    
+            # TODO: adding rest samples
+   
     #-------------------------------------------
 
     def get_frameList(self):
@@ -323,7 +324,7 @@ class AudioManager(BaseDriver):
         self._deqData = deque()
         self._deqIndex =0
         self._index =0
-        self._pat = None # for pattern
+        self._curPat = None # for pattern
         self._playing = False
         self._pausing = False
         self._sampIndex =0
@@ -386,13 +387,13 @@ class AudioManager(BaseDriver):
         """ First implementation """
         nb_data =4
         if len(self._deqData) > nb_data/2: return
-        samp_lst = self._pat.get_sampleList()
+        samp_lst = self._curPat.get_sampleList()
         while 1:
             if len(self._deqData) >= nb_data: break
             if self._sampIndex >= len(samp_lst):
                 self._sampIndex =0
             samp = samp_lst[self._sampIndex]
-            raw_data = samp.raw_data[0:self._pat._nbSamples]
+            raw_data = samp.raw_data[0:self._curPat._nbSamples]
             step = self._index + self._frameCount
             
             try:
@@ -416,12 +417,12 @@ class AudioManager(BaseDriver):
         elif not self._sampChanged and len(self._deqData) > nb_data/2: 
             return
 
-        samp_lst = self._pat.get_sampleList()
+        samp_lst = self._curPat.get_sampleList()
         if self._sampIndex >= len(samp_lst):
             self._sampIndex =0
         # print(f"sampIndex: {self._sampIndex}, len deq: {len(self._deqData)}")
         samp = samp_lst[self._sampIndex]
-        nb_samples = self._pat._nbSamples
+        nb_samples = self._curPat._nbSamples
         # reshape accept only a multiple of frame_count
         (quo, rest) = divmod(nb_samples, self._frameCount)
         if rest: nb_samples -= rest
@@ -447,82 +448,56 @@ class AudioManager(BaseDriver):
         render_audio3
         3nd implementation with deque object 
         """
-        frame_lst = self._pat.get_frameList()
+        cur_pat = self._curPat
+        frame_lst = cur_pat.get_frameList()
         if not frame_lst: return
+        samp_index = cur_pat._sampIndex
+        frame_index = cur_pat._frameIndex
         nb_data =2
         if len(self._deqData) > nb_data/2: return
 
-        # print(f"First sampIndex: {self._sampIndex}, Len frame_lst: {len(frame_lst)}")
-        
-        nb_times = self._pat._nbTimes
-        nb_count = self._pat._nbCount
-        index_starting = samp_starting = count_starting =0
-        is_counting = is_resting =0
-        rest_samples = self._pat._restSamples
-        if nb_times > 0: is_counting =1
-        rest_frame = self._pat._restFrame
+        # print(f"First sampIndex: {samp_index}, Len frame_lst: {len(frame_lst)}")
+        # print(f"frame_index: {frame_index}")
+        index_starting = samp_starting =0
 
-        if self._sampIndex >= len(frame_lst): 
+        if samp_index >= len(frame_lst): 
             frame_arr = frame_lst[0]
             # samp_starting =1
         else:
-            frame_arr = frame_lst[self._sampIndex]
+            frame_arr = frame_lst[samp_index]
         
-        if self._index >= len(frame_arr): 
+        if frame_index >= len(frame_arr): 
             audio_data = frame_arr[0]
-            # index_starting =1
         else:
-            audio_data = frame_arr[self._index]
+            audio_data = frame_arr[frame_index]
 
         while 1:
             if len(self._deqData) >= nb_data: break
            
-            if self._index >= len(frame_arr):
-                self._index =0
+            if frame_index >= len(frame_arr):
+                frame_index =0
+                cur_pat._frameIndex = frame_index
                 index_starting =1
             
             if index_starting:
-                
-                if is_counting:
-                    if nb_count >= nb_times:
-                        nb_count =1
-                        count_starting =1
-                    else:
-                        nb_count +=1
-                        count_starting =0
-                    if rest_samples:
-                        print(f"restSamples in render_audio: {rest_samples}")
-                        is_resting =1
-                    self._pat._nbCount = nb_count
-            
-                    if count_starting:
-                        if self._sampIndex >= len(frame_lst) -1:
-                            self._sampIndex =0
-                        else:
-                            self._sampIndex +=1
-                        samp_starting =1
-                        index_starting =0
 
-                else: # is not counting        
-                    if self._sampIndex >= len(frame_lst) -1:
-                        self._sampIndex =0
-                    else:
-                        self._sampIndex +=1
-                        samp_starting =1
-                        index_starting =0
-        
+                if samp_index >= len(frame_lst) -1:
+                    samp_index =0
+                    cur_pat._sampIndex = samp_index
+                else:
+                    samp_index +=1
+                    cur_pat._sampIndex = samp_index
+                    samp_starting =1
+                    index_starting =0
+    
             try:
-                if is_resting:
-                    print(f"len restFrame: {len(rest_frame)}")
-                    rest_data = [np.float32(data).tobytes() for data in rest_frame]
-                    self._deqData.extend(rest_data)
-                    print(f"len deqData: {len(self._deqData)}")
-                
-                audio_data = frame_arr[self._index]
+                audio_data = frame_arr[frame_index]
                 audio_data = np.float32(audio_data).tobytes()
                 self._deqData.append(audio_data)
                 # print("Len deq after loop: ", len(self._deqData))
-                self._index +=1
+                frame_index +=1
+                cur_pat._sampIndex = samp_index
+                cur_pat._frameIndex = frame_index
                 samp_starting =0
 
             except IndexError:
@@ -532,7 +507,7 @@ class AudioManager(BaseDriver):
 
     def render_audio4(self):
         """ 4nd implementation with deque object and bytes string list """
-        byte_lst = self._pat.get_byteList()
+        byte_lst = self._curPat.get_byteList()
         if not byte_lst: return
         nb_data =2
         if len(self._deqData) > nb_data/2: return
@@ -600,8 +575,8 @@ class AudioManager(BaseDriver):
     def init_pattern(self, bpm=120):
         """ create new pattern and returns audio data """
         audioData = []
-        pat = Pattern(bpm)
-        samp_len =1 # in secs
+        samp_len =6 # in secs
+        pat = Pattern(bpm, sampLen=samp_len)
         samp_lst = []
         midnote_lst = [60, 64, 67, 72]    
         for note in midnote_lst:
@@ -622,7 +597,7 @@ class AudioManager(BaseDriver):
 
         audioData = pat.gen_audio()
         
-        self._pat = pat
+        self._curPat = pat
         self.init_params()
 
         
@@ -632,7 +607,7 @@ class AudioManager(BaseDriver):
 
     def get_data(self):
         audioData = []
-        if self._pat is None:
+        if self._curPat is None:
             audioData = self.init_pattern()
        
         return audioData
@@ -640,32 +615,34 @@ class AudioManager(BaseDriver):
     #-------------------------------------------
     
     def change_bpm(self, bpm, inc=0):
-        if not self._pat: return
+        if not self._curPat: return
+        cur_bpm = self._curPat.get_bpm()
         if inc == 1: # is incremental
-            bpm = self._pat.get_bpm() + bpm
+            bpm += cur_bpm
 
-        self._pat.set_bpm(bpm)
-        self._pat.gen_audio()
+        self._curPat.set_bpm(bpm)
+        self._curPat.gen_audio()
         self.init_params()
-        msg = f"Bpm: {bpm}"
+        cur_bpm = self._curPat.get_bpm()
+        msg = f"Bpm: {cur_bpm}"
         self.print_info(msg)
 
     #-------------------------------------------
 
     def change_freq(self, index, freq, inc=0, msg=None):
-        assert self._pat
+        assert self._curPat
         if inc == 1: # is incremental
-            freq = self._pat.get_freq(index) + freq
+            freq = self._curPat.get_freq(index) + freq
             pass
 
-        samp_len =1 # in sec
-        samp_obj = self._pat.get_sample(index) # SampleObj(freq, samp_len)
+        samp_obj = self._curPat.get_sample(index) # SampleObj(freq, samp_len)
         assert samp_obj
         samp_obj.freq = freq
+        samp_len = samp_obj.data_len 
         samp_obj.raw_data = self._waveGen.gen_samples(freq, samp_len)
-        self._pat.gen_audio()
+        self._curPat.gen_audio()
         self.init_params()
-        freq = self._pat.get_freq(index)
+        freq = self._curPat.get_freq(index)
         if msg is None:
             msg = f"Freq: {freq}"
         self.print_info(msg)
@@ -673,12 +650,12 @@ class AudioManager(BaseDriver):
     #-------------------------------------------
 
     def change_note(self, index, note, inc=0):
-        assert self._pat
+        assert self._curPat
         if inc == 1: # is incremental
-            note = self._pat.get_note(index) + note
+            note = self._curPat.get_note(index) + note
             # print("val note: ", note)
 
-        self._pat.set_note(index, note)
+        self._curPat.set_note(index, note)
         freq = self._midTools.mid2freq(note)
         msg = f"Note: {note}"
         self.change_freq(index, freq, inc=0, msg=msg)
@@ -688,15 +665,17 @@ class AudioManager(BaseDriver):
 
      
     def init_pos(self):
-        if not self._pat: return
+        if not self._curPat: return
         self._index =0
         self._sampIndex =0
+        self._curPat._frameIndex =0
+        self._curPat._sampIndex =0
 
     #-------------------------------------------
 
     def init_params(self):
-        if self._pat:
-            self._audioData = self._pat.get_audioData()
+        if self._curPat:
+            self._audioData = self._curPat.get_audioData()
             self._dataLen = len(self._audioData)
             self.init_pos()
             self._sampChanged =1
@@ -737,7 +716,6 @@ class AudioManager(BaseDriver):
     #-------------------------------------------
  
     def print_info(self, info):
-        assert self._pat
         print(info)
 
     #-------------------------------------------
