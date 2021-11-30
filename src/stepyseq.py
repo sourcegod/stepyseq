@@ -6,6 +6,7 @@
     Author: Coolbrother
 """
 
+import os
 import math
 import time
 import numpy as np
@@ -13,9 +14,31 @@ import pyaudio
 from collections import deque
 import miditools
 import timeit
+import readline
 
 
 _pa = pyaudio.PyAudio()
+
+_HISTORY_TEMPFILE = "/tmp/.synth_history"
+
+def read_historyfile(filename=""):
+    if not filename:
+        filename = _HISTORY_FILENAME
+    if os.path.exists(filename):
+        readline.read_history_file(filename)
+        # print('Max history file length:', readline.get_history_length())
+        # print('Startup history:', get_history_items())
+
+#------------------------------------------------------------------------------
+
+def write_historyfile(filename=""):
+    # print('Final history:', get_history_items())
+    if not filename:
+        filename = _HISTORY_FILENAME
+    readline.write_history_file(filename)
+
+#------------------------------------------------------------------------------
+
 
 class SampleObj(object):
     def __init__(self, freq=0, _len=0):
@@ -131,8 +154,10 @@ class WaveGenerator(object):
         # arr *= np.zeros(nb_samples, dtype='float32')
         arr *= 0
         x = np.arange(nb_samples)
-        # the math function, is also the final sample
+        
         arr += np.sin(2 * np.pi * freq * x / self._rate, dtype='float64') # in float only
+        # arr1 = np.sin(2 * np.pi * freq * x / self._rate, dtype='float64') # in float only
+        # arr += arr1/2 # to be used later for effect
         # print(f"arr: {arr.dtype}")
         
         return arr
@@ -794,79 +819,87 @@ def f():
 
 
 def main():
+    filename = _HISTORY_TEMPFILE
+    read_historyfile(filename)
+
     audi_man = AudioManager()
     audi_man.init_audioDriver()
     audi_man.init_pattern()
     valStr = ""
     savStr = ""
-    while 1:
-        key = param1 = param2 = ""
-        valStr = input("-> ")
-        if valStr == '': valStr = savStr
-        else: savStr = valStr
-        if valStr == " ":
-            key = valStr
-        else:
-            lst = valStr.split()
+    
+    try:
+        while 1:
+            key = param1 = param2 = ""
+            valStr = input("-> ")
+            if valStr == '': valStr = savStr
+            else: savStr = valStr
+            if valStr == " ":
+                key = valStr
+            else:
+                lst = valStr.split()
+                
+                lenLst = len(lst)
+                if lenLst >0: key = lst[0]
+                if lenLst >1: param1 = lst[1]
+                if lenLst >2: param2 = lst[2]
+
+            if key == 'q':
+                print("Bye Bye!!!")
+                audi_man.stop()
+                audi_man.close_audioDriver()
+                break
+
+            elif key == 'p':
+                audi_man.play()
+            elif key == 's':
+                audi_man.stop()
+            elif key == ' ':
+                audi_man.play_pause()
+
+            elif key == "bpm":
+                if not param1: param1 = 120
+                audi_man.change_bpm(float(param1), inc=0) # not incremental
+            elif key == 'sb':
+                if not param1: param1 =10
+                audi_man.change_bpm(float(param1), inc=1)
+            elif key == 'sB':
+                if not param1: param1 =-10
+                audi_man.change_bpm(float(param1), inc=1)
+
+            elif key == "freq":
+                if not param1: param1 =0
+                if not param2: param2 =440
+                audi_man.change_freq(int(param1), float(param2), inc=0) # not incremental
+            elif key == 'sf':
+                if not param1: param1 =0
+                if not param2: param2 = 10
+                audi_man.change_freq(int(param1), float(param2), inc=1)
+            elif key == 'sF':
+                if not param1: param1 =0
+                if not param2: param2 = -10
+                audi_man.change_freq(int(param1), float(param2), inc=1)
+
+            elif key == "note":
+                if not param1: param1 =0
+                if not param2: param2 =69 # A4
+                audi_man.change_note(int(param1), int(param2), inc=0) # not incremental
+            elif key == "sn":
+                if not param1: param1 =0
+                if not param2: param2 =1
+                audi_man.change_note(int(param1), int(param2), inc=1)
+            elif key == "sN":
+                if not param1: param1 =0
+                if not param2: param2 =-1
+                audi_man.change_note(int(param1), int(param2), inc=1)
             
-            lenLst = len(lst)
-            if lenLst >0: key = lst[0]
-            if lenLst >1: param1 = lst[1]
-            if lenLst >2: param2 = lst[2]
+            elif key == "tt":
+                audi_man.perf()
+            elif key == "test":
+                audi_man.test()
+    finally:
+        write_historyfile(filename)
 
-        if key == 'q':
-            print("Bye Bye!!!")
-            audi_man.stop()
-            audi_man.close_audioDriver()
-            break
-
-        elif key == 'p':
-            audi_man.play()
-        elif key == 's':
-            audi_man.stop()
-        elif key == ' ':
-            audi_man.play_pause()
-
-        elif key == "bpm":
-            if not param1: param1 = 120
-            audi_man.change_bpm(float(param1), inc=0) # not incremental
-        elif key == 'sb':
-            if not param1: param1 =10
-            audi_man.change_bpm(float(param1), inc=1)
-        elif key == 'sB':
-            if not param1: param1 =-10
-            audi_man.change_bpm(float(param1), inc=1)
-
-        elif key == "freq":
-            if not param1: param1 =0
-            if not param2: param2 =440
-            audi_man.change_freq(int(param1), float(param2), inc=0) # not incremental
-        elif key == 'sf':
-            if not param1: param1 =0
-            if not param2: param2 = 10
-            audi_man.change_freq(int(param1), float(param2), inc=1)
-        elif key == 'sF':
-            if not param1: param1 =0
-            if not param2: param2 = -10
-            audi_man.change_freq(int(param1), float(param2), inc=1)
-
-        elif key == "note":
-            if not param1: param1 =0
-            if not param2: param2 =69 # A4
-            audi_man.change_note(int(param1), int(param2), inc=0) # not incremental
-        elif key == "sn":
-            if not param1: param1 =0
-            if not param2: param2 =1
-            audi_man.change_note(int(param1), int(param2), inc=1)
-        elif key == "sN":
-            if not param1: param1 =0
-            if not param2: param2 =-1
-            audi_man.change_note(int(param1), int(param2), inc=1)
-        
-        elif key == "tt":
-            audi_man.perf()
-        elif key == "test":
-            audi_man.test()
 #-------------------------------------------
 
 if __name__ == "__main__":
