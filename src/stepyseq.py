@@ -15,6 +15,7 @@ from collections import deque
 import miditools
 import timeit
 import readline
+import curses
 
 
 _pa = pyaudio.PyAudio()
@@ -818,7 +819,7 @@ def f():
 #========================================
 
 
-def main():
+def main_prompt():
     filename = _HISTORY_TEMPFILE
     read_historyfile(filename)
 
@@ -902,6 +903,107 @@ def main():
 
 #-------------------------------------------
 
+class MainApp(object):
+    def __init__(self):
+        self.stdscr = curses.initscr()
+        curses.noecho() # don't repeat key hit at the screen
+        # curses.cbreak()
+        # curses.raw() # for no interrupt mode like suspend, quit
+        curses.start_color()
+        curses.use_default_colors()
+        self.ypos =0; self.xpos =0
+        self.height, self.width = self.stdscr.getmaxyx()
+        self.win = curses.newwin(self.height, self.width, self.ypos, self.xpos)
+        self.win.refresh()
+        self.win.keypad(1) # allow to catch code of arrow keys and functions keys
+
+    #-------------------------------------------
+   
+    def display(self, msg=""):
+        self.win.clrtoeol()
+        self.win.refresh()
+        # self.win.addstr(3, 0, "                                                           ")
+        self.win.addstr(3, 0, str(msg))
+        self.win.move(3, 0)
+        self.win.refresh()
+
+    #-------------------------------------------
+
+    def close_win(self):
+        curses.nocbreak()
+        self.win.keypad(0)
+        curses.echo()
+
+    #-------------------------------------------
+
+    def beep(self):
+        curses.beep()
+
+    #-------------------------------------------
+
+    def init_app(self):
+        """
+        init application
+        from MainApp object
+        """
+        pass
+
+    #------------------------------------------------------------------------------
+        
+    def close_app(self):
+        """
+        close application
+        from MainApp object
+        """
+        pass
+
+    #------------------------------------------------------------------------------
+
+    def key_handler(self):
+        msg = "Press a key..."
+        self.display(msg)
+        curses.beep() # to test the nodelay function
+        while 1:
+            key = self.win.getch()
+            if key >= 32 and key < 128:
+                key = chr(key)
+            if key == 'Q':
+                self.close_app()
+                self.close_win()
+                self.beep()
+                break
+            elif key == 9: # Tab key
+                pass
+
+            elif key == 27: # Escape for key
+                self.beep()
+            elif  key == ' ': # space
+                self.beep()
+            elif key == ':': #
+                main_prompt()
+            elif key == 20: # ctrl+T
+                msg = "Test"
+                self.display(msg)
+                self.test()
+   
+    #-------------------------------------------
+    
+    def main(self):
+        self.init_app()
+        self.key_handler()
+
+    #-------------------------------------------
+
+    def test(self):
+        self.beep()
+            
+    #------------------------------------------------------------------------------
+
+#========================================
+
 if __name__ == "__main__":
-    main()
+    # main()
+    app = MainApp()
+    app.main()
+#------------------------------------------------------------------------------
 
