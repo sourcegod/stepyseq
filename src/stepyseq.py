@@ -116,11 +116,29 @@ class WaveGenerator(object):
         # create an array
         x = np.arange(nb_samples)
         # the math function, is also the final sample
-        arr = np.sin(2 * np.pi * freq * x / self._rate) # in float only
+        arr = np.sin(2 * np.pi * freq * x / self._rate, dtype='float64') # in float only
         
         return arr
 
     #-------------------------------------------
+
+    def gen_freq(self, arr, freq=440, _len=0):
+        """ generate frequency for an array in place """
+        if _len == 0:
+            _len = self._len
+        nb_samples = int(_len * self._rate)
+        # init the  array in place
+        # arr *= np.zeros(nb_samples, dtype='float32')
+        arr *= 0
+        x = np.arange(nb_samples)
+        # the math function, is also the final sample
+        arr += np.sin(2 * np.pi * freq * x / self._rate, dtype='float64') # in float only
+        # print(f"arr: {arr.dtype}")
+        
+        return arr
+
+    #-------------------------------------------
+
 
 #========================================
 
@@ -639,7 +657,10 @@ class AudioManager(BaseDriver):
         assert samp_obj
         samp_obj.freq = freq
         samp_len = samp_obj.data_len 
-        samp_obj.raw_data = self._waveGen.gen_samples(freq, samp_len)
+        # change samp_obj.raw_data in place
+        # samp_obj.raw_data = 
+        self._waveGen.gen_freq(samp_obj.raw_data, freq, samp_len)
+        # print(f"raw_data: {samp_obj.raw_data.dtype}")
         self._curPat.gen_audio()
         self.init_params()
         freq = self._curPat.get_freq(index)
