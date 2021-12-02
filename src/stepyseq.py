@@ -911,8 +911,7 @@ class CommandLine(object):
     #-------------------------------------------
 
 #========================================
-
-class MainApp(object):
+class MainWindowp(object):
     def __init__(self):
         self.stdscr = curses.initscr()
         curses.noecho() # don't repeat key hit at the screen
@@ -925,8 +924,6 @@ class MainApp(object):
         self.win = curses.newwin(self.height, self.width, self.ypos, self.xpos)
         self.win.refresh()
         self.win.keypad(1) # allow to catch code of arrow keys and functions keys
-        self._com = CommandLine()
-        self.audi_man = AudioManager()
 
     #-------------------------------------------
    
@@ -957,9 +954,6 @@ class MainApp(object):
         init application
         from MainApp object
         """
-        self.audi_man.init_audioDriver()
-        self.audi_man.init_pattern()
-        self._com.set_audiMan(self.audi_man)
 
     #------------------------------------------------------------------------------
         
@@ -981,8 +975,8 @@ class MainApp(object):
             if key >= 32 and key < 128:
                 key = chr(key)
             if key == 'Q':
-                self.audi_man.stop()
-                self.audi_man.close_audioDriver()
+                # self.audi_man.stop()
+                # self.audi_man.close_audioDriver()
                 self.close_app()
                 self.close_win()
                 self.beep()
@@ -995,14 +989,18 @@ class MainApp(object):
                 self.beep()
 
             elif key == 'p':
-                self.audi_man.play()
+                # self.audi_man.play()
+                pass
             elif key == 's':
-                self.audi_man.stop()
+                # self.audi_man.stop()
+                pass
             elif key == ' ':
-                self.audi_man.play_pause()
+                # self.audi_man.play_pause()
+                pass
 
             elif key == ':': #
-                self._com.mainloop()
+                pass
+
             elif key == 20: # ctrl+T
                 msg = "Test"
                 self.display(msg)
@@ -1021,10 +1019,49 @@ class MainApp(object):
             
     #------------------------------------------------------------------------------
 
+#=
+class MainApp(object):
+    def __init__(self):
+        self.audi_man = AudioManager()
+        self._com = CommandLine()
+
+    #-------------------------------------------
+   
+    def init_app(self):
+        """
+        init application
+        from MainApp object
+        """
+        self.audi_man.init_audioDriver()
+        self.audi_man.init_pattern()
+        self._com.set_audiMan(self.audi_man)
+
+    #------------------------------------------------------------------------------
+        
+    def close_app(self):
+        """
+        close application
+        from MainApp object
+        """
+        pass
+
+    #------------------------------------------------------------------------------
+
+   
+    def main(self):
+        self.init_app()
+        self._com.mainloop()
+
+    #-------------------------------------------
+
+    def test(self):
+        pass
+            
+    #------------------------------------------------------------------------------
+
 #========================================
 
 if __name__ == "__main__":
-    # main()
     app = MainApp()
     app.main()
 #------------------------------------------------------------------------------
