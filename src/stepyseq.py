@@ -818,90 +818,99 @@ def f():
 
 #========================================
 
+class CommandLine(object):
+    def __init__(self):
+        self.audi_man = None
+   
+    #-------------------------------------------
 
-def main_prompt():
-    filename = _HISTORY_TEMPFILE
-    read_historyfile(filename)
+    def set_audiMan(self, audi_man):
+        self.audi_man = audi_man
 
-    audi_man = AudioManager()
-    audi_man.init_audioDriver()
-    audi_man.init_pattern()
-    valStr = ""
-    savStr = ""
-    
-    try:
-        while 1:
-            key = param1 = param2 = ""
-            valStr = input("-> ")
-            if valStr == '': valStr = savStr
-            else: savStr = valStr
-            if valStr == " ":
-                key = valStr
-            else:
-                lst = valStr.split()
+    #-------------------------------------------
+
+    def mainloop(self):
+        filename = _HISTORY_TEMPFILE
+        read_historyfile(filename)
+
+        valStr = ""
+        savStr = ""
+
+        try:
+            while 1:
+                key = param1 = param2 = ""
+                valStr = input("-> ")
+                if valStr == '': valStr = savStr
+                else: savStr = valStr
+                if valStr == " ":
+                    key = valStr
+                else:
+                    lst = valStr.split()
+                    
+                    lenLst = len(lst)
+                    if lenLst >0: key = lst[0]
+                    if lenLst >1: param1 = lst[1]
+                    if lenLst >2: param2 = lst[2]
+
+                if key == 'q':
+                    print("Bye Bye!!!")
+                    self.audi_man.stop()
+                    self.audi_man.close_audioDriver()
+                    break
+
+                elif key == 'p':
+                    self.audi_man.play()
+                elif key == 's':
+                    self.audi_man.stop()
+                elif key == ' ':
+                    self.audi_man.play_pause()
+
+                elif key == "bpm":
+                    if not param1: param1 = 120
+                    self.audi_man.change_bpm(float(param1), inc=0) # not incremental
+                elif key == 'sb':
+                    if not param1: param1 =10
+                    self.audi_man.change_bpm(float(param1), inc=1)
+                elif key == 'sB':
+                    if not param1: param1 =-10
+                    self.audi_man.change_bpm(float(param1), inc=1)
+
+                elif key == "freq":
+                    if not param1: param1 =0
+                    if not param2: param2 =440
+                    self.audi_man.change_freq(int(param1), float(param2), inc=0) # not incremental
+                elif key == 'sf':
+                    if not param1: param1 =0
+                    if not param2: param2 = 10
+                    self.audi_man.change_freq(int(param1), float(param2), inc=1)
+                elif key == 'sF':
+                    if not param1: param1 =0
+                    if not param2: param2 = -10
+                    self.audi_man.change_freq(int(param1), float(param2), inc=1)
+
+                elif key == "note":
+                    if not param1: param1 =0
+                    if not param2: param2 =69 # A4
+                    self.audi_man.change_note(int(param1), int(param2), inc=0) # not incremental
+                elif key == "sn":
+                    if not param1: param1 =0
+                    if not param2: param2 =1
+                    self.audi_man.change_note(int(param1), int(param2), inc=1)
+                elif key == "sN":
+                    if not param1: param1 =0
+                    if not param2: param2 =-1
+                    self.audi_man.change_note(int(param1), int(param2), inc=1)
                 
-                lenLst = len(lst)
-                if lenLst >0: key = lst[0]
-                if lenLst >1: param1 = lst[1]
-                if lenLst >2: param2 = lst[2]
+                elif key == "tt":
+                    self.audi_man.perf()
+                elif key == "test":
+                    self.audi_man.test()
+        finally:
+            write_historyfile(filename)
 
-            if key == 'q':
-                print("Bye Bye!!!")
-                audi_man.stop()
-                audi_man.close_audioDriver()
-                break
+    #-------------------------------------------
 
-            elif key == 'p':
-                audi_man.play()
-            elif key == 's':
-                audi_man.stop()
-            elif key == ' ':
-                audi_man.play_pause()
-
-            elif key == "bpm":
-                if not param1: param1 = 120
-                audi_man.change_bpm(float(param1), inc=0) # not incremental
-            elif key == 'sb':
-                if not param1: param1 =10
-                audi_man.change_bpm(float(param1), inc=1)
-            elif key == 'sB':
-                if not param1: param1 =-10
-                audi_man.change_bpm(float(param1), inc=1)
-
-            elif key == "freq":
-                if not param1: param1 =0
-                if not param2: param2 =440
-                audi_man.change_freq(int(param1), float(param2), inc=0) # not incremental
-            elif key == 'sf':
-                if not param1: param1 =0
-                if not param2: param2 = 10
-                audi_man.change_freq(int(param1), float(param2), inc=1)
-            elif key == 'sF':
-                if not param1: param1 =0
-                if not param2: param2 = -10
-                audi_man.change_freq(int(param1), float(param2), inc=1)
-
-            elif key == "note":
-                if not param1: param1 =0
-                if not param2: param2 =69 # A4
-                audi_man.change_note(int(param1), int(param2), inc=0) # not incremental
-            elif key == "sn":
-                if not param1: param1 =0
-                if not param2: param2 =1
-                audi_man.change_note(int(param1), int(param2), inc=1)
-            elif key == "sN":
-                if not param1: param1 =0
-                if not param2: param2 =-1
-                audi_man.change_note(int(param1), int(param2), inc=1)
-            
-            elif key == "tt":
-                audi_man.perf()
-            elif key == "test":
-                audi_man.test()
-    finally:
-        write_historyfile(filename)
-
-#-------------------------------------------
+#========================================
 
 class MainApp(object):
     def __init__(self):
@@ -916,6 +925,8 @@ class MainApp(object):
         self.win = curses.newwin(self.height, self.width, self.ypos, self.xpos)
         self.win.refresh()
         self.win.keypad(1) # allow to catch code of arrow keys and functions keys
+        self._com = CommandLine()
+        self.audi_man = AudioManager()
 
     #-------------------------------------------
    
@@ -946,7 +957,9 @@ class MainApp(object):
         init application
         from MainApp object
         """
-        pass
+        self.audi_man.init_audioDriver()
+        self.audi_man.init_pattern()
+        self._com.set_audiMan(self.audi_man)
 
     #------------------------------------------------------------------------------
         
@@ -968,19 +981,28 @@ class MainApp(object):
             if key >= 32 and key < 128:
                 key = chr(key)
             if key == 'Q':
+                self.audi_man.stop()
+                self.audi_man.close_audioDriver()
                 self.close_app()
                 self.close_win()
                 self.beep()
                 break
+
             elif key == 9: # Tab key
                 pass
 
             elif key == 27: # Escape for key
                 self.beep()
-            elif  key == ' ': # space
-                self.beep()
+
+            elif key == 'p':
+                self.audi_man.play()
+            elif key == 's':
+                self.audi_man.stop()
+            elif key == ' ':
+                self.audi_man.play_pause()
+
             elif key == ':': #
-                main_prompt()
+                self._com.mainloop()
             elif key == 20: # ctrl+T
                 msg = "Test"
                 self.display(msg)
