@@ -189,6 +189,8 @@ class Pattern(object):
         self._byteLst = []
         self._sampIndex =0
         self._frameIndex =0
+        self._transpose =0
+        self._octave =4
 
         
         """
@@ -258,7 +260,29 @@ class Pattern(object):
                 pass
     
     #-------------------------------------------
-  
+
+    def get_transpose(self):
+        return self._transpose
+    
+    #-------------------------------------------
+
+    def set_transpose(self, num):
+        if num >= 0 and num <= 12:
+            self._transpose = num
+    
+    #-------------------------------------------
+    
+    def get_octave(self):
+        return self._octave
+    
+    #-------------------------------------------
+
+    def set_octave(self, num):
+        if num >= -1 and num <= 7:
+            self._octave = num
+    
+    #-------------------------------------------
+   
     def set_sample(self, index, samp):
         try:
             self._sampLst[index] = samp
@@ -658,10 +682,10 @@ class AudioManager(BaseDriver):
 
     #-------------------------------------------
     
-    def change_bpm(self, bpm, inc=0):
+    def change_bpm(self, bpm, adding=0):
         if not self._curPat: return
         cur_bpm = self._curPat.get_bpm()
-        if inc == 1: # is incremental
+        if adding == 1: # is incremental
             bpm += cur_bpm
 
         self._curPat.set_bpm(bpm)
@@ -673,9 +697,9 @@ class AudioManager(BaseDriver):
 
     #-------------------------------------------
 
-    def change_freq(self, index, freq, inc=0, msg=None):
+    def change_freq(self, index, freq, adding=0, msg=None):
         assert self._curPat
-        if inc == 1: # is incremental
+        if adding == 1: # is incremental
             freq = self._curPat.get_freq(index) + freq
             pass
 
@@ -696,21 +720,42 @@ class AudioManager(BaseDriver):
 
     #-------------------------------------------
 
-    def change_note(self, index, note, inc=0):
+    def change_note(self, index, note, adding=0):
         assert self._curPat
-        if inc == 1: # is incremental
+        if adding == 1: # is incremental
             note = self._curPat.get_note(index) + note
             # print("val note: ", note)
 
         self._curPat.set_note(index, note)
         freq = self._midTools.mid2freq(note)
         msg = f"Note: {note}"
-        self.change_freq(index, freq, inc=0, msg=msg)
+        self.change_freq(index, freq, adding=0, msg=msg)
         # self.print_info(msg)
 
     #-------------------------------------------
 
-     
+    def change_transpose(self, num, adding=0):
+        assert self._curPat
+        val = self._curPat.get_transpose() + num
+        if val >=0 and val <=12:
+            samp_lst = self._curPat.get_sampleList()
+            self._curPat.set_transpose(val)
+            for (index, samp) in enumerate(samp_lst):
+                note = self._curPat.get_note(index)
+                note += num
+                self._curPat.set_note(index, note)
+                freq = self._midTools.mid2freq(note)
+                self.change_freq(index, freq, adding=0, msg="")
+            
+        
+        note = self._curPat.get_note(0)
+        val = self._curPat.get_transpose()
+        msg = f"Transpose: {val}, Note: {note}"
+        self.print_info(msg)
+
+    #-------------------------------------------
+
+      
     def init_pos(self):
         if not self._curPat: return
         self._index =0
@@ -867,40 +912,47 @@ class CommandLine(object):
 
                 elif key == "bpm":
                     if not param1: param1 = 120
-                    self.audi_man.change_bpm(float(param1), inc=0) # not incremental
+                    self.audi_man.change_bpm(float(param1), adding=0) # not incremental
                 elif key == 'sb':
                     if not param1: param1 =10
-                    self.audi_man.change_bpm(float(param1), inc=1)
+                    self.audi_man.change_bpm(float(param1), adding=1)
                 elif key == 'sB':
                     if not param1: param1 =-10
-                    self.audi_man.change_bpm(float(param1), inc=1)
+                    self.audi_man.change_bpm(float(param1), adding=1)
 
                 elif key == "freq":
                     if not param1: param1 =0
                     if not param2: param2 =440
-                    self.audi_man.change_freq(int(param1), float(param2), inc=0) # not incremental
+                    self.audi_man.change_freq(int(param1), float(param2), adding=0) # not incremental
                 elif key == 'sf':
                     if not param1: param1 =0
                     if not param2: param2 = 10
-                    self.audi_man.change_freq(int(param1), float(param2), inc=1)
+                    self.audi_man.change_freq(int(param1), float(param2), adding=1)
                 elif key == 'sF':
                     if not param1: param1 =0
                     if not param2: param2 = -10
-                    self.audi_man.change_freq(int(param1), float(param2), inc=1)
+                    self.audi_man.change_freq(int(param1), float(param2), adding=1)
 
                 elif key == "note":
                     if not param1: param1 =0
                     if not param2: param2 =69 # A4
-                    self.audi_man.change_note(int(param1), int(param2), inc=0) # not incremental
+                    self.audi_man.change_note(int(param1), int(param2), adding=0) # not incremental
                 elif key == "sn":
                     if not param1: param1 =0
                     if not param2: param2 =1
-                    self.audi_man.change_note(int(param1), int(param2), inc=1)
+                    self.audi_man.change_note(int(param1), int(param2), adding=1)
                 elif key == "sN":
                     if not param1: param1 =0
                     if not param2: param2 =-1
-                    self.audi_man.change_note(int(param1), int(param2), inc=1)
-                
+                    self.audi_man.change_note(int(param1), int(param2), adding=1)
+
+                elif key == "st":
+                    if not param1: param1 =1
+                    self.audi_man.change_transpose(int(param1), adding=1)
+                elif key == "sT":
+                    if not param1: param1 =-1
+                    self.audi_man.change_transpose(int(param1), adding=1)
+                  
                 elif key == "tt":
                     self.audi_man.perf()
                 elif key == "test":
@@ -911,7 +963,8 @@ class CommandLine(object):
     #-------------------------------------------
 
 #========================================
-class MainWindowp(object):
+
+class MainWindow(object):
     def __init__(self):
         self.stdscr = curses.initscr()
         curses.noecho() # don't repeat key hit at the screen
@@ -924,6 +977,7 @@ class MainWindowp(object):
         self.win = curses.newwin(self.height, self.width, self.ypos, self.xpos)
         self.win.refresh()
         self.win.keypad(1) # allow to catch code of arrow keys and functions keys
+        self.audi_man = None
 
     #-------------------------------------------
    
@@ -949,10 +1003,15 @@ class MainWindowp(object):
 
     #-------------------------------------------
 
+    def set_audiMan(self, audi_man):
+        self.audi_man = audi_man
+
+    #-------------------------------------------
+
     def init_app(self):
         """
         init application
-        from MainApp object
+        from MainWindow object
         """
 
     #------------------------------------------------------------------------------
@@ -960,7 +1019,7 @@ class MainWindowp(object):
     def close_app(self):
         """
         close application
-        from MainApp object
+        from MainWindow object
         """
         pass
 
@@ -1008,7 +1067,7 @@ class MainWindowp(object):
    
     #-------------------------------------------
     
-    def main(self):
+    def mainloop(self):
         self.init_app()
         self.key_handler()
 
@@ -1019,11 +1078,15 @@ class MainWindowp(object):
             
     #------------------------------------------------------------------------------
 
-#=
+#========================================
+
+
 class MainApp(object):
     def __init__(self):
         self.audi_man = AudioManager()
         self._com = CommandLine()
+        self._win = None
+        # self._win = MainWindow()
 
     #-------------------------------------------
    
@@ -1035,6 +1098,7 @@ class MainApp(object):
         self.audi_man.init_audioDriver()
         self.audi_man.init_pattern()
         self._com.set_audiMan(self.audi_man)
+        # self._win.set_audiMan(self.audi_man)
 
     #------------------------------------------------------------------------------
         
