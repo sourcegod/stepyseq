@@ -267,7 +267,7 @@ class Pattern(object):
     #-------------------------------------------
 
     def set_transpose(self, num):
-        if num >= 0 and num <= 12:
+        if num >=-12 and num <= 12:
             self._transpose = num
     
     #-------------------------------------------
@@ -278,7 +278,7 @@ class Pattern(object):
     #-------------------------------------------
 
     def set_octave(self, num):
-        if num >= -1 and num <= 7:
+        if num >=0 and num <=8:
             self._octave = num
     
     #-------------------------------------------
@@ -736,8 +736,12 @@ class AudioManager(BaseDriver):
 
     def change_transpose(self, num, adding=0):
         assert self._curPat
-        val = self._curPat.get_transpose() + num
-        if val >=0 and val <=12:
+        if adding == 1:
+            val = self._curPat.get_transpose() + num
+        else: # not incremental
+            val = num 
+            num -= self._curPat.get_transpose()
+        if val >=-12 and val <=12:
             samp_lst = self._curPat.get_sampleList()
             self._curPat.set_transpose(val)
             for (index, samp) in enumerate(samp_lst):
@@ -754,6 +758,33 @@ class AudioManager(BaseDriver):
         self.print_info(msg)
 
     #-------------------------------------------
+
+    def change_octave(self, num, adding=0):
+        assert self._curPat
+        if adding == 1:
+            val = self._curPat.get_octave() + num
+        else: # not incremental
+            val = num 
+            num -= self._curPat.get_octave()
+        if val >=0 and val <=8:
+            samp_lst = self._curPat.get_sampleList()
+            self._curPat.set_octave(val)
+            num *= 12 # 12 notes by  octave
+            for (index, samp) in enumerate(samp_lst):
+                note = self._curPat.get_note(index)
+                note += num
+                self._curPat.set_note(index, note)
+                freq = self._midTools.mid2freq(note)
+                self.change_freq(index, freq, adding=0, msg="")
+            
+        
+        note = self._curPat.get_note(0)
+        val = self._curPat.get_octave()
+        msg = f"Octave: {val}, Note: {note}"
+        self.print_info(msg)
+
+    #-------------------------------------------
+
 
       
     def init_pos(self):
@@ -946,13 +977,27 @@ class CommandLine(object):
                     if not param2: param2 =-1
                     self.audi_man.change_note(int(param1), int(param2), adding=1)
 
+                elif key == "oct":
+                    if not param1: param1 =4
+                    self.audi_man.change_octave(int(param1), adding=0) # not incremental
+                elif key == "trs":
+                    if not param1: param1 =0
+                    self.audi_man.change_transpose(int(param1), adding=0) # not incremental
                 elif key == "st":
                     if not param1: param1 =1
                     self.audi_man.change_transpose(int(param1), adding=1)
                 elif key == "sT":
                     if not param1: param1 =-1
                     self.audi_man.change_transpose(int(param1), adding=1)
-                  
+                
+                elif key == "so":
+                    if not param1: param1 =1
+                    self.audi_man.change_octave(int(param1), adding=1)
+                elif key == "sO":
+                    if not param1: param1 =-1
+                    self.audi_man.change_octave(int(param1), adding=1)
+ 
+                
                 elif key == "tt":
                     self.audi_man.perf()
                 elif key == "test":
