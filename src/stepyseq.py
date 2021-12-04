@@ -397,6 +397,8 @@ class AudioManager(BaseDriver):
         self._pausing = False
         self._sampIndex =0
         self._sampChanged =0
+        self._isMixing =1
+        self._vol =1
 
     #-------------------------------------------
 
@@ -560,6 +562,8 @@ class AudioManager(BaseDriver):
     
             try:
                 audio_data = frame_arr[frame_index]
+                if self._isMixing:
+                    audio_data = self.get_mixData(audio_data.copy())
                 audio_data = np.float32(audio_data).tobytes()
                 self._deqData.append(audio_data)
                 # print("Len deq after loop: ", len(self._deqData))
@@ -571,6 +575,14 @@ class AudioManager(BaseDriver):
             except IndexError:
                 pass
 
+    #-------------------------------------------
+
+    def get_mixData(self, data):
+        """ transform audio data """
+        # gain = 0.1
+        data *= self._vol
+        
+        return data
     #-------------------------------------------
 
     def render_audio4(self):
@@ -785,8 +797,20 @@ class AudioManager(BaseDriver):
 
     #-------------------------------------------
 
+    def change_volume(self, num, adding=0):
+        assert self._curPat
+        if adding == 1:
+            num += self._vol
+        if num >=0 and num <=1:
+            self._vol = num
+       
+        vol = self._vol 
+        msg = f"Volume: {vol:.1f}"
+        self.print_info(msg)
 
-      
+    #-------------------------------------------
+
+
     def init_pos(self):
         if not self._curPat: return
         self._index =0
@@ -977,9 +1001,6 @@ class CommandLine(object):
                     if not param2: param2 =-1
                     self.audi_man.change_note(int(param1), int(param2), adding=1)
 
-                elif key == "oct":
-                    if not param1: param1 =4
-                    self.audi_man.change_octave(int(param1), adding=0) # not incremental
                 elif key == "trs":
                     if not param1: param1 =0
                     self.audi_man.change_transpose(int(param1), adding=0) # not incremental
@@ -990,13 +1011,26 @@ class CommandLine(object):
                     if not param1: param1 =-1
                     self.audi_man.change_transpose(int(param1), adding=1)
                 
+                elif key == "oct":
+                    if not param1: param1 =4
+                    self.audi_man.change_octave(int(param1), adding=0) # not incremental
                 elif key == "so":
                     if not param1: param1 =1
                     self.audi_man.change_octave(int(param1), adding=1)
                 elif key == "sO":
                     if not param1: param1 =-1
                     self.audi_man.change_octave(int(param1), adding=1)
- 
+
+                elif key == "vol":
+                    if not param1: param1 =1
+                    self.audi_man.change_volume(float(param1), adding=0) # not incremental
+                elif key == "sv":
+                    if not param1: param1 =0.1
+                    self.audi_man.change_volume(float(param1), adding=1)
+                elif key == "sV":
+                    if not param1: param1 =-0.1
+                    self.audi_man.change_volume(float(param1), adding=1)
+  
                 
                 elif key == "tt":
                     self.audi_man.perf()
