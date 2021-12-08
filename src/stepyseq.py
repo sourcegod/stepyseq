@@ -399,6 +399,9 @@ class AudioManager(BaseDriver):
         self._sampChanged =0
         self._isMixing =1
         self._vol =1
+        self._durLst = [0, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]
+        self._quantLen =0
+        self._quantIndex =0
 
     #-------------------------------------------
 
@@ -563,7 +566,7 @@ class AudioManager(BaseDriver):
             try:
                 audio_data = frame_arr[frame_index]
                 if self._isMixing:
-                    audio_data = self.get_mixData(audio_data.copy())
+                    audio_data = self.get_mixData(frame_index, audio_data)
                 audio_data = np.float32(audio_data).tobytes()
                 self._deqData.append(audio_data)
                 # print("Len deq after loop: ", len(self._deqData))
@@ -577,9 +580,11 @@ class AudioManager(BaseDriver):
 
     #-------------------------------------------
 
-    def get_mixData(self, data):
+    def get_mixData(self, index, data):
         """ transform audio data """
-        # gain = 0.1
+        data = data.copy()
+        if self._quantLen:
+            self.set_quantizeLen(index, data)
         data *= self._vol
         
         return data
@@ -810,6 +815,45 @@ class AudioManager(BaseDriver):
 
     #-------------------------------------------
 
+    def change_quantizeLen(self, num, adding=0):
+        assert self._curPat
+        quant_index = self._quantIndex
+        if adding == 1:
+            quant_index += num
+        else:
+            try: 
+                quant_index = self._durLst.index(num)
+            except ValueError:
+                quant_index = -1
+        
+        if quant_index >=0 and quant_index < len(self._durLst):
+            nb_samples = self._curPat._nbSamples
+            self._quantLen = self._durLst[quant_index]
+            self._quantIndex = quant_index
+       
+        quant_len = self._quantLen
+        msg = f"Quantize len: {quant_len}"
+        self.print_info(msg)
+
+    #-------------------------------------------
+
+    def set_quantizeLen(self, index, audio_data):
+      
+        quant_len = self._quantLen
+        if quant_len >1:
+            nb_samples = int(self._curPat._nbSamples / quant_len)
+            quant_index = int(nb_samples / self._frameCount)
+            if index >= quant_index:
+                audio_data *= 0
+        """
+        msg = f"Quantize index: {quant_index}"
+        self.print_info(msg)
+        """
+
+
+    #-------------------------------------------
+
+
 
     def init_pos(self):
         if not self._curPat: return
@@ -1031,7 +1075,16 @@ class CommandLine(object):
                     if not param1: param1 =-0.1
                     self.audi_man.change_volume(float(param1), adding=1)
   
-                
+                elif key == "quant":
+                    if not param1: param1 =1
+                    self.audi_man.change_quantizeLen(int(param1), adding=0)
+                elif key == "sq":
+                    if not param1: param1 =1
+                    self.audi_man.change_quantizeLen(int(param1), adding=1)
+                elif key == "sQ":
+                    if not param1: param1 =-1
+                    self.audi_man.change_quantizeLen(int(param1), adding=1)
+                 
                 elif key == "tt":
                     self.audi_man.perf()
                 elif key == "test":
